@@ -84,7 +84,7 @@ extern TCPWORKERTHREADINFO_T m_tcp_worker_thread_info[];
 /*
  * Globals
  */
-extern char *port;
+extern char port[];
 extern unsigned short int baud;
 extern char parity;
 extern unsigned int delay;

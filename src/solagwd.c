@@ -34,7 +34,7 @@
 #include "modbusgw.h"
 
 /* Global configuration parameters */
-const char *port			= DEFAULTPORT;
+char port[] = DEFAULTPORT;
 const unsigned short int baud		= DEFAULTBAUD;
 const char parity			= DEFAULTPARITY;
 const char bits			= DEFAULTBITS;
