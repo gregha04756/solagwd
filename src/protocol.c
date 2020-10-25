@@ -11,18 +11,11 @@
 #include <syslog.h>
 #include "modbusgw.h"
 
-#if 0
-static unsigned short int calc_crc16(unsigned char *ptr, int len);
-static int check_crc16(unsigned char *buf, int buflen);
-#endif
-
 int
 buf2mbap(unsigned char *buf, int bufsize, mbap_t *mbapheader)
 {
-	if(bufsize < MBAPBUFSIZE) {
-		if(debug) {
-			fprintf(stderr, "buf2mbap: invalid bufsize\n");
-		}
+	if(bufsize < MBAPBUFSIZE)
+	{
 		return 0;
 	}
 	mbapheader->transaction_id = (buf[0]<<8) + buf[1];
@@ -37,10 +30,8 @@ buf2mbap(unsigned char *buf, int bufsize, mbap_t *mbapheader)
 int
 mbap2buf(mbap_t *mbapheader, unsigned char *buf, int bufsize)
 {
-	if(bufsize < MBAPBUFSIZE) {
-		if(debug) {
-			fprintf(stderr, "mbap2buf: invalid bufsize %d\n", bufsize);
-		}
+	if(bufsize < MBAPBUFSIZE)
+	{
 		return 0;
 	}
 	buf[0] = (mbapheader->transaction_id >> 8) & 0xFF;
@@ -75,15 +66,13 @@ build_serial_pdu(mbap_t *header, unsigned char *srcbuf, int srcbufsize,
 	/*
 	 * Make sure the source looks correct
 	 */
-	if(header->protocol_id != 0) {
-		if(debug)
-			fprintf(stderr, "Invalid protocol ID\n");
+	if(header->protocol_id != 0)
+	{
 		return 0;
 	}
 
-	if((header->length-1 + MBADDRSIZE + MBCRCSIZE) > destbufsize) {
-		if(debug)
-			fprintf(stderr, "Buffer too short\n");
+	if((header->length-1 + MBADDRSIZE + MBCRCSIZE) > destbufsize)
+	{
 		return 0;
 	}
 
@@ -96,7 +85,9 @@ build_serial_pdu(mbap_t *header, unsigned char *srcbuf, int srcbufsize,
 	 * Copy the PDU
 	 */
 	for(i=0; i < header->length-1; i++)
+	{
 		destbuf[i+1] = srcbuf[i];
+	}
 
 
 	/*
@@ -133,19 +124,19 @@ build_ip_pdu(mbap_t *header,
 	/*
 	 * Will it fit?
 	 */
-	if(destbuflen < sizeof(*header) + srcbuflen - MBCRCSIZE) {
-		if(debug) {
-			fprintf(stderr, "build_ip_pdu(): destination buffer too small\n");
-		}
+	if(destbuflen < sizeof(*header) + srcbuflen - MBCRCSIZE)
+	{
 		return 0;
 	}
 
 	/*
 	 * Is its CRC good?
 	 */
-	if(check_crc16(srcbuf, srcbuflen)==0) {
-		if(debug) {
-			fprintf(stderr, "build_ip_pdu(): source message CRC is bad\n");
+	if(check_crc16(srcbuf, srcbuflen)==0)
+	{
+		if(debug)
+		{
+			syslog(LOG_NOTICE, "build_ip_pdu(): source message CRC is bad");
 		}
 		return 0;
 	}
@@ -160,7 +151,8 @@ build_ip_pdu(mbap_t *header,
 	/*
 	 * Copy the mbap into the buffer
 	 */
-	if(!mbap2buf(header, destbuf, destbuflen)) {
+	if(!mbap2buf(header, destbuf, destbuflen))
+	{
 		return 0;
 	}
 	destbuf = destbuf + MBAPBUFSIZE;
