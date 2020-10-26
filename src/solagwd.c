@@ -34,7 +34,7 @@
 #include "modbusgw.h"
 
 /* Global configuration parameters */
-char port[] = DEFAULTPORT;
+const char port[] = DEFAULTPORT;
 const unsigned short int baud		= DEFAULTBAUD;
 const char parity			= DEFAULTPARITY;
 const char bits			= DEFAULTBITS;
@@ -128,6 +128,8 @@ main(int argc, char *argv[])
 	pthread_t tcpthread;
 
 	skeleton_daemon();
+
+    syslog (LOG_NOTICE, "solagwd started.");
 
 	/*
 	 * Make sure at least one of tcp or udp are enabled.
