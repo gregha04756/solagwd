@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
+#include <syslog.h>
 #include "modbusgw.h"
 
 const uint16_t System_Status_Change_Reg_Addr = 0;
@@ -56,7 +57,7 @@ setup_udp(int port)
 	saddr.sin_port = htons(port);
 
 	if(bind(fd_udp, (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
-		perror("setup_udp(): bind()");
+		syslog(LOG_ERR, "setup_udp(): bind() %s", strerror(errno));
 		fd_udp = -1;
 		return(-1);
 	}
@@ -88,7 +89,7 @@ setup_tcp(int port)
 	saddr.sin_port = htons(port);
 
 	if(bind(fd_tcp, (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
-		perror("setup_tcp(): bind()");
+		syslog(LOG_ERR, "setup_tcp(): bind() %s", strerror(errno));
 		fd_tcp = -1;
 		return(-1);
 	}
@@ -250,7 +251,7 @@ void set_the_primary_worker_thread(int thread_count)
 #ifdef _DEBUG
 	if (1 < i_worker_count)
 	{
-		perror("Invalid worker thread count > 1\n");
+		syslog(LOG_ERR, "Invalid worker thread count > 1");
 	}
 #endif
 	if (1 < thread_count)
@@ -501,7 +502,7 @@ tcp_worker_thread(void * thread_info)
 
 	if(pthread_sigmask(SIG_BLOCK, &sigs, NULL) != 0) {
 		if(debug) {
-			fprintf(stderr, "pthread_sigmask() failed\n");
+			syslog(LOG_ERR, "pthread_sigmask() failed %s", strerror(errno));
 		}
 	}
 
@@ -522,7 +523,7 @@ tcp_worker_thread(void * thread_info)
 		} else if((rc == -1) && (errno != EAGAIN)) {
 			/* ERROR */
 			if(debug) {
-				perror("worker_thread(): read()");
+				syslog(LOG_ERR, "worker_thread(): read() %s", strerror(errno));
 			}
 			break;
 		} else {
@@ -531,7 +532,7 @@ tcp_worker_thread(void * thread_info)
 		}
 
 		if(debug && m.length > 256) {
-			fprintf(stderr, "Warning: invalid packet received (tcp)\n");
+			syslog(LOG_ERR, "Warning: invalid packet received (tcp) %s", strerror(errno));
 		}
 
 		if(m.protocol_id != 0 || m.length > sizeof(ipbuffer)) {
@@ -558,13 +559,14 @@ tcp_worker_thread(void * thread_info)
 			 */
 
 			rc = read(pt_info->fd, ipbuffer, m.length-1);
-
+#if 0
 			if(debug)
 			{
 				fprintf(stderr, "Worker thread 0x%08lx processing transaction %d\n",
 					(unsigned long int) pthread_self(),
 					m.transaction_id);
 			}
+#endif
 
 			count = build_serial_pdu(&m, ipbuffer, sizeof(ipbuffer),
 						 serpacket, sizeof(serpacket));
@@ -593,22 +595,26 @@ tcp_worker_thread(void * thread_info)
 			if (is_register_in_request(System_Status_Change_Reg_Addr, serpacket, count))
 			{
 				uint16_t value = get_value_from_response(System_Status_Change_Reg_Addr, serpacket, count, response, rc);
+#if 0
 				if (0 != value)
 				{
-					fprintf(stderr, "Worker thread 0x%08lx status change %04x\n",
+					syslog(LOG_NOTICE, "Worker thread 0x%08lx status change %04x",
 						m_tcp_worker_thread_info[pt_info->thread_index].h_TCP_Worker_Thread,
 						value);
 				}
+#endif
 			}
 			if (is_register_in_request(System_Configuration_Change_Reg_Addr, serpacket, count))
 			{
 				uint16_t value = get_value_from_response(System_Configuration_Change_Reg_Addr, serpacket, count, response, rc);
+#if 0
 				if (0 != value)
 				{
-					fprintf(stderr, "Worker thread 0x%08lx configuration change %04x\n",
+					syslog(LOG_NOTICE, "Worker thread 0x%08lx configuration change %04x",
 						m_tcp_worker_thread_info[pt_info->thread_index].h_TCP_Worker_Thread,
 						value);
 				}
+#endif
 			}
 #endif
 
@@ -621,10 +627,12 @@ tcp_worker_thread(void * thread_info)
 #endif
 			if (rc == 0)
 			{
+#if 0
 				if (debug)
 				{
 					fprintf(stderr,"No response\n");
 				}
+#endif
 				// Insert the "Gateway problem - the target device failed to respond" Modbus exception
 				// into the response, followed by 2 bytes of dummy CRC and set the response length to 5
 				response[0] = 0x00;
@@ -639,7 +647,7 @@ tcp_worker_thread(void * thread_info)
 			{
 				if (debug)
 				{
-					fprintf(stderr,"transaction() failed, aborting\n");
+					syslog(LOG_ERR, "transaction() failed, aborting %s", strerror(errno));
 				}
 				break;
 			}
@@ -656,9 +664,11 @@ tcp_worker_thread(void * thread_info)
 			/*
 			 * Send it back up the socket
 			 */
+#if 0
 			if(debug) {
 				printf("write(fd=%d, %d)\n", pt_info->fd, count);
 			}
+#endif
 			write(pt_info->fd, ipbuffer, count);
 
 
@@ -685,10 +695,10 @@ tcp_worker_thread(void * thread_info)
 
 	if(debug) {
 		if(errors >= MAXERRCOUNT) {
-			fprintf(stderr, "Worker thread 0x%lx shutting down after %d errors\n",
+			syslog(LOG_ERR, "Worker thread 0x%08x shutting down after %d errors",
 				(unsigned long int) pthread_self(), errors);
 		} else {
-			fprintf(stderr, "Worker thread 0x%lx shutting down\n",
+			syslog(LOG_INFO, "Worker thread 0x%lx shutting down",
 				(unsigned long int) pthread_self());
 		}
 	}
@@ -724,7 +734,7 @@ tcp_listen_thread(int fd)
 	{
 		if(debug)
 		{
-			fprintf(stderr, "pthread_sigmask() failed\n");
+			syslog(LOG_ERR, "pthread_sigmask() failed %s", strerror(errno));
 		}
 	}
 
@@ -751,11 +761,11 @@ tcp_listen_thread(int fd)
 		pthread_mutex_lock(&listener_mutex);
 		while(tcp_work_threads > MAXTCPWORKTHREADS) {
 			if(debug) {
-				fprintf(stderr, "Waiting for available worker thread\n");
+				syslog(LOG_NOTICE, "Waiting for available worker thread");
 			}
 			pthread_cond_wait(&listener_wakeup, &listener_mutex);
 			if(debug) {
-				fprintf(stderr, "A worker thread might be available\n");
+				syslog(LOG_NOTICE, "A worker thread might be available");
 			}
 		}
 		pthread_mutex_unlock(&listener_mutex);
@@ -784,7 +794,7 @@ tcp_listen_thread(int fd)
 		rc = select(fd+1, &fdset_r, NULL, NULL, &timeout);
 
 		if(rc == -1) {
-			perror("tcp_listen_thread(): select()");
+			syslog(LOG_ERR, "tcp_listen_thread(): select() %s", strerror(errno));
 			break;
 		}
 
@@ -812,7 +822,7 @@ tcp_listen_thread(int fd)
 #ifdef _DEBUG
 				if (MAXTCPWORKTHREADS <= nTCPWorkerThread)
 				{
-					perror("Invalid nTCPWorkerThread > MAXTCPWORKTHREADS");
+					syslog(LOG_ERR, "Invalid nTCPWorkerThread > MAXTCPWORKTHREADS");
 				}
 #endif
 				nTCPWorkerThread = (nTCPWorkerThread < MAXTCPWORKTHREADS) ? nTCPWorkerThread : 0;
@@ -829,7 +839,8 @@ tcp_listen_thread(int fd)
 				       (void *)&m_tcp_worker_thread_info[nTCPWorkerThread]);
 				if(debug)
 				{
-					fprintf(stderr, "Started worker 0x%08lx\n",(unsigned long int) m_tcp_worker_thread_info[nTCPWorkerThread].h_TCP_Worker_Thread);
+					syslog(LOG_NOTICE, "Started worker 0x%08lx",
+							(unsigned long int) m_tcp_worker_thread_info[nTCPWorkerThread].h_TCP_Worker_Thread);
 				}
 
 				/*
@@ -843,7 +854,7 @@ tcp_listen_thread(int fd)
 
 			} else
 			{
-				perror("tcp_listen_thread(): accept()");
+				syslog(LOG_ERR, "tcp_listen_thread(): accept() %s", strerror(errno));
 				break;
 			}
 		}
@@ -876,7 +887,7 @@ udp_worker_thread(int fd)
 
 	if(pthread_sigmask(SIG_BLOCK, &sigs, NULL) != 0) {
 		if(debug) {
-			fprintf(stderr, "pthread_sigmask() failed\n");
+			syslog(LOG_ERR, "pthread_sigmask() failed %s", strerror(errno));
 		}
 	}
 
@@ -885,12 +896,14 @@ udp_worker_thread(int fd)
 		fromlen = sizeof(from);
 		rc = recvfrom(fd, udpbuffer, sizeof(udpbuffer), 0,
 			      (struct sockaddr *) &from, &fromlen);
+#if 0
 		if(debug) {
 			fprintf(stderr, "Got a udp request\n");
 		}
+#endif
 		if(rc<0) {
 			if(debug) {
-				perror("udp_worker_thread(): recvfrom()");
+				syslog(LOG_ERR, "udp_worker_thread(): recvfrom() %s", strerror(errno));
 			}
 			continue;
 		}
@@ -907,7 +920,7 @@ udp_worker_thread(int fd)
 
 		if(header.protocol_id != 0 || header.length > 256) {
 			if(debug) {
-				fprintf(stderr, "Invalid UDP message received, protocol %u, length %u\n",
+				syslog(LOG_ERR, "Invalid UDP message received, protocol %u, length %u",
 					header.protocol_id, header.length);
 			}
 			continue;
@@ -915,7 +928,7 @@ udp_worker_thread(int fd)
 
 		if(rc != header.length + MBAPBUFSIZE - MBADDRSIZE) {
 			if(debug) {
-				fprintf(stderr, "Invalid UDP message received, packet length mismatch: expected %d bytes but got %d\n",
+				syslog(LOG_ERR, "Invalid UDP message received, packet length mismatch: expected %d bytes but got %d",
 					header.length + MBAPBUFSIZE - MBADDRSIZE,
 					rc);
 			}
@@ -925,8 +938,7 @@ udp_worker_thread(int fd)
 		datasize = rc - MBAPBUFSIZE + MBADDRSIZE;
 
 		if(verbose) {
-			fprintf(stderr,
-			    "Received %d byte request, transaction id %d, unit %u, function=0x%02X\n",
+			syslog(LOG_INFO, "Received %d byte request, transaction id %d, unit %u, function=0x%02X",
 			    rc, header.transaction_id, header.unit, data[0]);
 		}
 
@@ -943,13 +955,15 @@ udp_worker_thread(int fd)
 				   sizeof(serresponse),
 				   timeout, 100);
 		if(rc==0) {
+#if 0
 			if(debug) {
 				fprintf(stderr, "No response\n");
 			}
+#endif
 			continue;
 		} else if(rc<0) {
 			if(debug) {
-				fprintf(stderr, "transaction() failed, disconnecting\n");
+				syslog(LOG_ERR, "transaction() failed, disconnecting %s", strerror(errno));
 			}
 			break;
 		} else {
@@ -961,11 +975,13 @@ udp_worker_thread(int fd)
 				udpbuffer,
 				sizeof(udpbuffer));
 
+#if 0
 			if(verbose) {
 				fprintf(stderr, "Detected a %d byte response, generating a %d byte packet: \n",
 					rc,
 					count);
 			}
+#endif
 
 
 
@@ -974,9 +990,9 @@ udp_worker_thread(int fd)
 
 			if(verbose) {
 				if(rc < 0)
-					perror("sendto()");
-				else
-					fprintf(stderr, "%d sent\n", rc);
+				{
+					syslog(LOG_ERR, "sendto() %s", strerror(errno));
+				}
 			}
 
 		}
